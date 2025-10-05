@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Holy Shift — Word Cloud Studio</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+</head>
+<body>
+  <div class="page">
+    <header class="page__header">
+      <h1>Holy Shift — Word Cloud Studio</h1>
+      <p>Create, customise, and download the theological word cloud.</p>
+    </header>
+    <main class="page__content">
+      <section class="panel">
+        <h2>1. Data Source</h2>
+        <div class="field">
+          <label>Input type
+            <select id="file-type">
+              <option value="auto" selected>Auto-detect</option>
+              <option value="json">JSON (structured)</option>
+              <option value="text">Plain text</option>
+            </select>
+          </label>
+        </div>
+        <div class="field">
+          <label for="json-upload">Upload file</label>
+          <input type="file" id="json-upload" accept="application/json,text/plain,.txt,.md,.csv" />
+          <p class="field__hint">Upload a <code>.json</code> or text file. Uploaded files are stored in <code>data/uploads/</code>.</p>
+          <p class="field__status" id="upload-status">No file uploaded.</p>
+        </div>
+        <div class="field">
+          <label for="json-path">Existing file path (optional)</label>
+          <input type="text" id="json-path" placeholder="data/holy-shift.ghost.2025-10-01-17-44-39.json" />
+          <p class="field__hint">Use this if the file already lives inside the project workspace.</p>
+        </div>
+        <div class="field" id="json-key-field">
+          <label for="json-keys">JSON text keys</label>
+          <input type="text" id="json-keys" placeholder="plaintext, body, content" />
+          <p class="field__hint">Comma or newline list of keys whose values should be treated as text. Leave blank for defaults.</p>
+        </div>
+        <div class="field" id="json-all-field">
+          <label class="chip">
+            <input type="checkbox" id="json-all-strings" />
+            <span>Collect every string value found in the JSON payload</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>2. Text Processing</h2>
+        <div class="field-group">
+          <span class="field__label">Stopword groups</span>
+          <div class="chips" id="stopword-groups">
+            {% for group in stop_groups %}
+            <label class="chip">
+              <input type="checkbox" value="{{ group }}" checked />
+              <span>{{ group }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="field">
+          <label for="extra-stopwords">Additional stopwords</label>
+          <textarea id="extra-stopwords" rows="2" placeholder="comma or newline separated"></textarea>
+        </div>
+        <div class="field">
+          <label for="remove-stopwords">Remove from stopwords</label>
+          <textarea id="remove-stopwords" rows="2" placeholder="comma or newline separated"></textarea>
+        </div>
+        <div class="field">
+          <label for="keep-short">Force-keep short terms</label>
+          <textarea id="keep-short" rows="2" placeholder="e.g. ab, eu"></textarea>
+        </div>
+        <div class="field">
+          <label for="boosts">Boost phrases (phrase=factor)</label>
+          <textarea id="boosts" rows="3" placeholder="kingdom of god=3.5"></textarea>
+        </div>
+        <div class="field field--stacked">
+          <label class="chip">
+            <input type="checkbox" id="detect-references" checked />
+            <span>Detect Bible references</span>
+          </label>
+          <label class="stacked-input">Reference weight
+            <input type="number" id="reference-weight" min="0" max="20" value="4" />
+          </label>
+        </div>
+      </section>
+
+      <section class="analysis-panel">
+        <h2>Analysis & Boosting</h2>
+        <div class="actions analysis-actions">
+          <button id="analyze-btn" type="button">Analyze Tokens</button>
+          <button id="apply-adjustments" type="button" disabled>Apply Adjustments</button>
+          <button id="clear-adjustments" type="button" disabled>Clear Adjustments</button>
+          <span id="analysis-summary">No analysis yet.</span>
+        </div>
+        <div class="analysis-table-wrap">
+          <table id="analysis-table">
+            <thead>
+              <tr>
+                <th>Word / Phrase</th>
+                <th>Base</th>
+                <th>Ref +</th>
+                <th>Final</th>
+                <th>Boost×</th>
+                <th>Applied Δ</th>
+                <th>Target Final</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>4. Weighting & Layout</h2>
+        <div class="field-grid">
+          <label>Max items
+            <input type="number" id="max-items" min="10" max="1000" value="420" />
+          </label>
+          <label>Min font (px)
+            <input type="number" id="min-font" min="4" max="400" value="9" />
+          </label>
+          <label>Max font (px)
+            <input type="number" id="max-font" min="10" max="400" value="180" />
+          </label>
+          <label>Curve power
+            <input type="range" id="curve-power" min="0.2" max="1.5" step="0.05" value="0.75" />
+            <span class="range-value" id="curve-power-value">0.75</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>5. Appearance</h2>
+        <div class="field-grid">
+          <label>Palette
+            <select id="palette">
+              {% for name, colours in theme_presets.items() %}
+              <option value="{{ name }}" {% if name == 'muted' %}selected{% endif %}>{{ name.replace('_', ' ')|title }}</option>
+              {% endfor %}
+              <option value="custom">Custom…</option>
+            </select>
+          </label>
+          <label class="field full-width" id="custom-palette-field" hidden>
+            Custom palette (comma list)
+            <input type="text" id="custom-palette" placeholder="#123456, #abcdef" />
+          </label>
+          <label>Font family
+            <select id="font-family">
+              <option value="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" selected>Inter / System Sans</option>
+              <option value="\"Cormorant Garamond\", 'Times New Roman', serif">Cormorant Garamond</option>
+              <option value="\"Playfair Display\", 'Times New Roman', serif">Playfair Display</option>
+              <option value="\"Fira Sans\", 'Helvetica Neue', Helvetica, Arial, sans-serif">Fira Sans</option>
+              <option value="\"Source Serif Pro\", Georgia, serif">Source Serif Pro</option>
+            </select>
+          </label>
+        </div>
+        <div class="field-grid">
+          <label>Canvas width (px)
+            <input type="number" id="canvas-width" min="400" max="4000" value="1920" />
+          </label>
+          <label>Canvas height (px)
+            <input type="number" id="canvas-height" min="300" max="4000" value="1080" />
+          </label>
+          <label>Title
+            <input type="text" id="title" value="Holy Shift Word Cloud" />
+          </label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>6. Generate</h2>
+        <div class="actions">
+          <button id="render-btn" type="button">Render Cloud</button>
+          <button id="reset-form" type="button">Reset</button>
+          <button id="download-png" type="button" disabled>Download PNG</button>
+          <button id="download-html" type="button" disabled>Download HTML</button>
+          <span id="status">Waiting for data…</span>
+        </div>
+      </section>
+    </main>
+
+    <aside class="preview">
+      <canvas id="cloud" width="1920" height="1080"></canvas>
+    </aside>
+  </div>
+
+  <script src="https://unpkg.com/d3@7"></script>
+  <script src="https://unpkg.com/d3-cloud/build/d3.layout.cloud.js"></script>
+  <script>
+    window.WORDCLOUD_DEFAULTS = {
+      stopGroups: {{ stop_groups | tojson }},
+      palette: {{ default_palette | tojson }},
+      font: {{ default_font | tojson }},
+      themes: {{ theme_presets | tojson }},
+      defaultTheme: "muted"
+    };
+  </script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
